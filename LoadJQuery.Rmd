@@ -1,0 +1,32 @@
+---
+title: "Load JQuery"
+author: "Jared P. Lander"
+date: "July 1, 2017"
+output: ioslides_presentation
+---
+
+```{r deps,include=FALSE}
+# this ensures jquery is loaded
+dep <- htmltools::htmlDependency(name = "jquery", version = "1.11.3", src = system.file("rmd/h/jquery-1.11.3", package='rmarkdown'), script = "jquery.min.js")
+htmltools::attachDependencies(htmltools::tags$span(''), dep)
+```
+
+```{js move-id-background-color}
+$(document).ready(function(){
+  // for every article tag inside a slide tag
+  $("slide > article").each(function(){
+    // copy the article name to the parentNode's (the slide) ID
+    this.parentNode.id=$(this).attr('name');
+  });
+});
+```
+
+```{r background-function,include=FALSE}
+makeBG <- function(id, file)
+{
+    cat(
+        sprintf('<style type="text/css">\n#%s {\nbackground-image: url(%s);\n}\n</style>',
+                id, knitr::image_uri(file))
+    )
+}
+```

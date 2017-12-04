@@ -1,0 +1,64 @@
+.gdbar img {
+  width: 200px !important;
+  height: 200px !important;
+  margin: 8px 8px;
+}
+
+.gdbar {
+  width: 400px !important;
+  height: 200px !important;
+}
+
+slides > slide:not(.nobackground):before {
+  width: 750px;
+  height: 75px;
+  background-size: 75px 75px;
+}
+
+.codetxt{
+  color: orange;
+  background-color: #000000;
+}
+
+.consoletxt{
+  color: white;
+  background-color: #000000;
+}
+
+.fullslide img {
+  margin-top: -85px;
+  margin-left: -60px;
+}
+
+a:link {
+    font-size: 16pt;
+}
+
+tt {
+  font-family: Courier;
+  text-decoration: bold;
+}
+
+.footer {
+  color:red; 
+  font-size:14pt; 
+  font-style:italic;
+  position:absolute; 
+  bottom:100px;>
+}
+
+pre {
+  font-family: 'Source Code Pro', 'Courier New', monospace;
+  font-size: 18px;
+  line-height: 20px;
+  padding: 10px 0 10px 70px;
+  letter-spacing: -1px;
+  margin-bottom: 10px;
+  width: 106%;
+  left: -60px;
+  position: relative;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  /*overflow: hidden;*/
+}

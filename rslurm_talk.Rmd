@@ -1,0 +1,366 @@
+---
+title: "Slurmming it in R"
+author: "Kyle Hart"
+date: "`r format(Sys.Date())`"
+output: 
+  ioslides_presentation:
+    # logo: gfx/logo.png
+    css: styles.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(purrr)
+library(tibble)
+library(broom)
+library(rslurm)
+library(knitr)
+```
+
+```{r load-jquery,child='LoadJQuery.Rmd'}
+```
+
+## It's highly addictive! {.SlideClass #SlideID name=Fry}
+```{r results='asis',echo=FALSE}
+makeBG(id='Fry', 'gfx/slurm3_resized.jpg')
+```
+
+## What is this talk about?
+* Very simple implementation of Slurm in R on Exacloud. 
+* No details on tuning Slurm--we're sticking to default settings. 
+* Focus on embarrassingly parallel tasks only.
+* It's a simple demo of the <tt>**rslurm**</tt> package, which makes slurmming it in R easy. 
+
+Details:
+
+https://cran.r-project.org/web/packages/rslurm/vignettes/rslurm.html
+
+## What is Slurm?
+```{r out.width = "100%", fig.align="center"}
+include_graphics("gfx/slurm_diagram.png") 
+```
+
+## Embarrassing parallel tasks
+* No effort to split the processing among multiple processors
+* No need to communicate or share results between tasks
+
+**Embarrassing:** Have 10 nodes simulate 1000 datasets, run a single linear model on each dataset, and report the p-value for the first independent variable in each model.
+
+**Less embarrassing:** Have 10 nodes simulate 1000 datasets, with the parameters of each dataset refined based on a summary of the previous dataset.
+
+<!-- ## Embarrassing examples -->
+<!-- * Have 20 babboons make 100 sandwiches using 100 slices of meat, 100 slices of tomato, and 200 slices of bread. -->
+<!-- * Have 5 squirrels pack 100 lunches using the 100 sandwiches made by babboons -->
+<!-- * Have 10 nodes simulate 1000 datasets, run a single linear model on each dataset, and report the p-value for the first independent variable in each model. -->
+
+<!-- ## Less embarrassing examples -->
+<!-- * Have 20 babboons make 100 sandwiches without using the same kind of meat in more than 10 sandwiches.  -->
+<!-- * Have 5 squirrels pack 100 lunches, cutting the crust off of each sandwich only if all the other squirrels were able to resist taking a bite while packing the concurrent lunches. -->
+<!-- * Have 10 nodes simulate 1000 datasets, with the parameters of each dataset refined based on a summary of the previous dataset. -->
+
+# The exacloud environment
+
+## Connecting to exacloud
+**On a PC:** http://www.putty.org/
+
+**On a Mac:** ⌘-space > Terminal
+
+<br><br>
+**Secure shell:**
+<div style="background-color: #000000; color:lightgreen;">
+```
+$ ssh exahead1.ohsu.edu
+```
+</div>
+
+## Setting up the environment
+* I had to install packages and dependencies one at a time. 
+* <tt>install.packages("tidyverse")</tt> has never worked for me on Exacloud. I would welcome insights into this problem. 
+
+## Directories to use
+* For running parallelized scripts, put your data in <tt>/home/exacloud/lustre1/biostat/hartky</tt>.<span style="color:red;">*</span>
+* Can also store your script on lustre, or you can put it in your home directory (<tt>/home/users/hartky</tt><span style="color:red;">*</span>)
+
+<div class="footer">
+\* If you are not <tt>**hartky**</tt>, replace that part with your own user name.
+</div>
+
+## Directories not to use
+* Don't store your data on lustre when you're done with it. I put mine in <tt>/home/groups/biostats/hartky</tt><span style="color:red;">*</span>, but I don't know if that's the right thing to do. 
+    + Discuss!
+* Don't put any data in <tt>/home/users/hartky</tt><span style="color:red;">*</span> at any time. 
+    + Doing so upsets the admins. 
+
+<div class="footer">
+\* If you are not <tt>**hartky**</tt>, replace that part with your own user name.
+</div>
+
+## Partitions
+**Default:** Exacloud. All nodes except GPU. Time Limit: 36 hours. Preempt Action: Requeue. 
+
+**mpi:** Infiniband-connected nodes. Time Limit: 14 days. Preempt Action: Requeue. 
+
+**gpu:** GPU nodes. Time Limit: 14 days. Preempt Action: Requeue. 
+
+**long_jobs:** 10gbps ethernet nodes. Time Limit: 10 days. Preempt Action: Requeue. Limits: 60 jobs running.
+
+**very_long_jobs:** 10gbps ethernet nodes. Time Limit: 30 days. Preempt Action: Suspend.
+
+# R package rslurm
+
+## Motivating example
+Fry, Leela, Bender, Zoidberg, and Amy deliver a lot of packages to the Alpha Centauri system. Leela and Fry have gotten into an argument about who is the better pilot and can deliver packages more quickly. To settle the dispute, we would like to conduct an RCT where each delivery is randomized to be piloted by either Fry or Leela. Professor Farnsworth is designing the study, and he thinks Leela gets the packages to Alpha Centauri on average 20 minutes faster than Fry. How many observations of deliveries do we need to have 80% power to detect a difference of 20 minutes in delivery time between the two pilots? 
+
+```{r  out.width = "20%", fig.align="right"}
+include_graphics("gfx/Planet_express.png") 
+```
+
+## Sample size
+$H_1: \mu_1 - \mu_0 \ne 0$
+
+If we set $\mu_0 = 240$, $\mu_1 = 220$, $\sigma_0 = \sigma_1 = 20$, and $n_1 = n_2$, we can solve for $n$ easily:
+
+$$
+\begin{align*}
+n_1 = n_2 &= \frac{2\sigma^2(z_{1-\alpha/2} + z_{1-\beta})^2}{\mu_1 - \mu_0} \\[0.2in]
+ &= \frac{2(20^2)(1.960 + 0.842)^2}{240 - 220} \\[0.2in]
+ &\approx `r ceiling((2*(20^2) * (qnorm(.975) + qnorm(.8))^2) / (20^2))`
+\end{align*}
+$$
+
+## Sample size
+$H_1: \mu_1 - \mu_0 \ne 0$
+
+Could also use the black box:
+
+```{r echo=TRUE}
+power.t.test(delta=20, sd=20, power=0.8)
+```
+
+## Simulation
+But let's pretend we want to use simulation instead. 
+
+Generate a dataset; start with sample size $n = 10$:
+```{r}
+set.seed(2412)
+```
+
+```{r echo=TRUE}
+n <- 10
+(sim_df <- tibble(x = c(rep(0, n/2), rep(1, n/2)),
+                  y = 240 - (20 * x) + rnorm(n=n, mean=0, sd=20)))
+```
+
+## Simulation
+```{r echo=TRUE}
+t.test(y ~ x, data=sim_df)
+```
+
+```{r}
+isnt <- ifelse(t.test(y ~ x, data=sim_df)$p.value <= 0.05, yes="is", no="isn't")
+```
+
+It `r isnt` significant at $\alpha=0.05$. 
+
+## Simulation
+
+Record results:
+```{r echo=TRUE}
+sig_tests <- list(n_10 = c(0),
+                  n_11 = c(),
+                  n_12 = c(),
+                  n_13 = c())
+```
+
+Repeat 10,000 times:
+
+```{r}
+sig_tests$n_10 <- c(sig_tests$n_10, rbinom(10000, size=1, p=0.56))
+sig_tests
+```
+
+## Simulation
+
+Solve for power:
+```{r echo=TRUE}
+sum(sig_tests$n_10) / length(sig_tests$n_10)
+```
+
+Increment $n$ by 2 and start over. Repeat until power $\ge 0.80$.
+
+## Functionalize
+```{r echo=TRUE}
+run_sim <- function(n) {
+  sim_df <- tibble(x = c(rep(0, n/2), rep(1, n/2)),
+                   y = 240 - (20 * x) + rnorm(n=n, mean=0, sd=20))
+  result <- t.test(sim_df$y ~ sim_df$x)
+  significant <- ifelse(result$p.value < 0.05, 
+                        yes = 1,
+                        no = 0)
+  return(as.integer(significant))
+}
+
+run_sim(10)
+```
+
+## Purrr {.SlideClass #SlideID name=purrr}
+```{r results='asis',echo=FALSE}
+makeBG(id='purrr', 'gfx/rstudio-hex-purrr.png')
+```
+
+Generate a vector of <tt>n_sims</tt> 10s. 
+```{r echo=TRUE}
+n_sims <- 20
+(sample_size <- rep(10, n_sims))
+```
+
+Run the simulation function <tt>n_sims</tt> times.
+```{r echo=TRUE}
+(test_results <- map_int(sample_size, run_sim))
+```
+
+Calculate power for sample size $n=10$.
+```{r echo=TRUE}
+sum(test_results)/length(test_results)
+```
+
+## Functionalize again
+```{r echo=TRUE, cache=TRUE}
+calc_power <- function(n, n_sims) {
+  sample_size <- rep(n, n_sims)
+  test_results <- map_int(sample_size, run_sim)
+  return(sum(test_results)/length(test_results))
+}
+
+pwr <- map_dbl(seq(10,40, by=2), calc_power, n_sims=100)
+
+cbind(n=seq(10,40, by=2), pwr)
+```
+
+## Do it in base R 
+**<tt>lapply(X, FUN, ...)</tt>**
+
+```{r echo=TRUE, cache=TRUE}
+calc_power_base <- function(n, n_sims) {
+  sample_size <- rep(n, n_sims)
+  test_results <- unlist(lapply(X=sample_size, FUN=run_sim))
+  return(sum(test_results)/length(test_results))
+}
+
+pwr <- sapply(X=seq(10,40, by=2), FUN=calc_power_base, n_sims=100)
+
+cbind(n=seq(10,40, by=2), pwr)
+```
+
+## Do it in Slurm
+```{r echo=TRUE, eval=FALSE}
+(sample_sizes <- seq(10,40, by=2))
+
+(params_df <- data.frame(n = sample_sizes,
+                        n_sims = rep(100, length(sample_sizes))))
+
+sjob <- slurm_apply(f=calc_power_base, 
+                    params=params_df,
+                    jobname = "sample_size_job2",
+                    nodes = 4, cpus_per_node = 2)
+```
+
+<div class="footer">
+\* Unlike lapply, slurm_apply requires params to be passed as a data frame, with the column names matching the names of the parallelized function's parameters. 
+</div>
+
+## Namespaces
+```{r echo=TRUE, eval=FALSE}
+(sample_sizes <- seq(10,40, by=2))
+
+sjob <- slurm_apply(f=calc_power_base, 
+                    params=params_df,
+                    jobname = "sample_size_job2",
+                    nodes = 4, cpus_per_node = 2)
+```
+
+Except this won't work. Why not?
+
+## A slurm implementation that works
+```{r eval=FALSE, echo=TRUE}
+calc_power_base <- function(n, n_sims) {
+  sample_size <- rep(n, n_sims)
+  test_results <- unlist(lapply(X=sample_size, FUN=function(n) {
+    sim_df <- data.frame(x = c(rep(0, n/2), rep(1, n/2)),
+                         y = batman(n))
+    
+    sim_df$y <- 240 - (20 * sim_df$x) + rnorm(n=n, mean=0, sd=20)
+    
+    result <- t.test(sim_df$y ~ sim_df$x)
+    
+    significant <- ifelse(result$p.value < 0.05, 
+                          yes = 1,
+                          no = 0)
+    
+    return(as.integer(significant))
+  }))
+  return(sum(test_results)/length(test_results))
+}
+
+sjob <- slurm_apply(f=calc_power_base, 
+                    params=params_df,
+                    jobname = "sample_size_job2",
+                    nodes = 4, cpus_per_node = 2)
+```
+
+## Retrieving results
+```{r echo=TRUE, eval=FALSE}
+print_job_status(sjob)
+```
+
+```{r echo=TRUE, eval=FALSE}
+(res <- get_slurm_out(sjob, outtype = "table"))
+
+cbind(sample_sizes, res)
+```
+
+## Slurm options
+The <tt>slurm_options</tt> argument passes options to Slurm's <tt>sbatch</tt> command. 
+
+https://slurm.schedmd.com/sbatch.html
+
+```{r echo=TRUE, eval=FALSE}
+sopt <- list(time = "1:00:00",
+             `mail-type` = "END",
+             `mail-user` = "hartky@ohsu.edu",
+             #<b>
+            partition = "exacloud"#</b>
+)
+
+sjob <- slurm_apply(f=calc_power_base, 
+                    params=data.frame(n = sample_sizes,
+                                      n_sims = rep(100, length(sample_sizes))), ## * 
+                    jobname = "sample_size_job",
+                    nodes = 2, cpus_per_node = 2,
+                    #<b>
+                  slurm_options = sopt#</b>
+)
+```
+
+## Under the hood
+<div style="background-color: #000000; color:lightgreen;">
+```
+exahead1 $ ls
+_rslurm_sample_size_job
+exahead1 $ cd _rslurm_sample_size_job/
+exahead1 $ ls
+f.RDS  params.RDS  results_0.RDS  results_1.RDS  slurm_0.out  slurm_1.out  slurm_run.R  submit.sh
+exahead1 $ ls -l
+total 12
+-rw-r--r--. 1 hartky HPCUsers  980 Dec  4 12:25 f.RDS
+-rw-r--r--. 1 hartky HPCUsers  174 Dec  4 12:25 params.RDS
+-rw-r--r--. 1 hartky HPCUsers   95 Dec  4 12:26 results_0.RDS
+-rw-r--r--. 1 hartky HPCUsers   98 Dec  4 12:26 results_1.RDS
+-rw-r--r--. 1 hartky HPCUsers  362 Dec  4 12:26 slurm_0.out
+-rw-r--r--. 1 hartky HPCUsers  362 Dec  4 12:26 slurm_1.out
+-rw-r--r--. 1 hartky HPCUsers 1006 Dec  4 12:25 slurm_run.R
+-rw-r--r--. 1 hartky HPCUsers  262 Dec  4 12:25 submit.sh
+```
+</div>
+
+
