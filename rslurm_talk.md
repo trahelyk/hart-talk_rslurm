@@ -1,11 +1,12 @@
----
-title: "Slurmming it in R"
-author: "Kyle Hart"
-date: "03 May 2017"
-output:
-  ioslides_presentation:
-    css: styles.css
----
+# Slurmming it in R
+Kyle Hart  
+`r format(Sys.Date())`  
+
+
+
+
+
+
 
 <script type="text/javascript">
 $(document).ready(function(){

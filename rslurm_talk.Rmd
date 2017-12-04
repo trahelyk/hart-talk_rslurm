@@ -2,7 +2,10 @@
 title: "Slurmming it in R"
 author: "Kyle Hart"
 date: "`r format(Sys.Date())`"
-output: 
+# output:
+#   html_document:
+#     keep_md: true
+output:
   ioslides_presentation:
     # logo: gfx/logo.png
     css: styles.css
