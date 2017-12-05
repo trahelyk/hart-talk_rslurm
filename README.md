@@ -7,16 +7,6 @@ output:
     css: styles.css
 ---
 
-<script type="text/javascript">
-$(document).ready(function(){
-  // for every article tag inside a slide tag
-  $("slide > article").each(function(){
-    // copy the article name to the parentNode's (the slide) ID
-    this.parentNode.id=$(this).attr('name');
-  });
-});
-</script>
-
 ## It's highly addictive! 
 ![](gfx/slurm3_resized.jpg)
 
@@ -41,16 +31,6 @@ https://cran.r-project.org/web/packages/rslurm/vignettes/rslurm.html
 
 **Less embarrassing:** Have 10 nodes simulate 1000 datasets, with the parameters of each dataset refined based on a summary of the previous dataset.
 
-<!-- ## Embarrassing examples -->
-<!-- * Have 20 babboons make 100 sandwiches using 100 slices of meat, 100 slices of tomato, and 200 slices of bread. -->
-<!-- * Have 5 squirrels pack 100 lunches using the 100 sandwiches made by babboons -->
-<!-- * Have 10 nodes simulate 1000 datasets, run a single linear model on each dataset, and report the p-value for the first independent variable in each model. -->
-
-<!-- ## Less embarrassing examples -->
-<!-- * Have 20 babboons make 100 sandwiches without using the same kind of meat in more than 10 sandwiches.  -->
-<!-- * Have 5 squirrels pack 100 lunches, cutting the crust off of each sandwich only if all the other squirrels were able to resist taking a bite while packing the concurrent lunches. -->
-<!-- * Have 10 nodes simulate 1000 datasets, with the parameters of each dataset refined based on a summary of the previous dataset. -->
-
 # The exacloud environment
 
 ## Connecting to exacloud
@@ -60,11 +40,11 @@ https://cran.r-project.org/web/packages/rslurm/vignettes/rslurm.html
 
 <br><br>
 **Secure shell:**
-<div style="background-color: #000000; color:lightgreen;">
+
 ```
 $ ssh exahead1.ohsu.edu
 ```
-</div>
+
 
 ## Setting up the environment
 * I had to install packages and dependencies one at a time. 
